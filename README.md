@@ -17,8 +17,10 @@ spikes.
 | `domains.txt` | 410 ad, SSP and tracker domains observed in Blitz network traffic and cookies |
 | `docs/findings.md` | How the analysis was done, what was measured, what failed and why |
 | `scripts/make_pac.py` | Builds PAC files (full + compact) and the `data:` URL variant |
-| `scripts/launch_noads.ps1` | Starts Blitz with the PAC, process-scoped |
+| `scripts/sync_pac.py` | Rebuilds the PAC when the Blitz version or domain list changes |
+| `scripts/launch_noads.ps1` | Starts Blitz with the PAC, process-scoped, syncing first |
 | `scripts/make_shortcut.ps1` | Creates the desktop launcher shortcut |
+| `scripts/install_task.ps1` | Registers the logon + 2-hour PAC sync scheduled task |
 | `scripts/hosts_apply.ps1` | System-wide hosts file block (works, but affects every app) |
 | `scripts/hosts_revert.ps1` | Removes the managed hosts block |
 | `scripts/asar_inject.py` | asar rebuilder / injector; **experimental, rejected**, see findings |
@@ -72,6 +74,36 @@ spikes.
 
    DNS still resolves (the PAC decides, not DNS). Check the app log or a local
    proxy on `127.0.0.1:9` if you want request-level confirmation.
+
+### Keeping the PAC current after a Blitz update
+
+Blitz updates itself in place. `scripts/sync_pac.py` reads the installed
+`app.asar` version, compares it with `build\.state.json` and the hash of
+`domains.txt`, and rebuilds the PAC only when one of them changed:
+
+```powershell
+python scripts\sync_pac.py            # regenerate if needed
+python scripts\sync_pac.py --force    # always regenerate
+```
+
+It runs automatically in two places:
+
+1. **Before every launch.** `launch_noads.ps1` calls it first, then reads the
+   fresh `blitz-pac-url.txt`. Failures are logged to `build\sync.log` and do not
+   stop Blitz from starting.
+2. **On a schedule.** Register a task that runs at logon and every 2 hours:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts\install_task.ps1
+   # remove it again
+   powershell -ExecutionPolicy Bypass -File scripts\install_task.ps1 -Uninstall
+   ```
+
+   Task name: `BlitzNoAds PAC Sync`.
+
+Note that syncing only re-encodes the domain list that is already checked in. It
+does not discover new ad domains; add those to `domains.txt` and the next sync
+picks them up.
 
 ### System-wide hosts block (aggressive, affects everything)
 
