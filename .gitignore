@@ -1,0 +1,18 @@
+# generated artifacts
+build/
+
+# binaries and blitz data
+*.asar
+*.asar.backup
+*.dmp
+*.log
+
+# python
+__pycache__/
+*.pyc
+
+# editors / os
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
