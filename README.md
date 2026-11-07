@@ -18,9 +18,9 @@ spikes.
 | `docs/findings.md` | How the analysis was done, what was measured, what failed and why |
 | `scripts/make_pac.py` | Builds PAC files (full + compact) and the `data:` URL variant |
 | `scripts/sync_pac.py` | Rebuilds the PAC when the Blitz version or domain list changes |
+| `scripts/watch_update.py` | Watches one launch for a Blitz update, rebuilds PAC, restarts Blitz |
 | `scripts/launch_noads.ps1` | Starts Blitz with the PAC, process-scoped, syncing first |
 | `scripts/make_shortcut.ps1` | Creates the desktop launcher shortcut |
-| `scripts/install_task.ps1` | Registers the logon + 2-hour PAC sync scheduled task |
 | `scripts/hosts_apply.ps1` | System-wide hosts file block (works, but affects every app) |
 | `scripts/hosts_revert.ps1` | Removes the managed hosts block |
 | `scripts/asar_inject.py` | asar rebuilder / injector; **experimental, rejected**, see findings |
@@ -86,20 +86,23 @@ python scripts\sync_pac.py            # regenerate if needed
 python scripts\sync_pac.py --force    # always regenerate
 ```
 
-It runs automatically in two places:
+The launcher drives everything; no background service or scheduled task is
+installed:
 
-1. **Before every launch.** `launch_noads.ps1` calls it first, then reads the
-   fresh `blitz-pac-url.txt`. Failures are logged to `build\sync.log` and do not
-   stop Blitz from starting.
-2. **On a schedule.** Register a task that runs at logon and every 2 hours:
+1. **Before launch** `launch_noads.ps1` calls `sync_pac.py`, so a client that was
+   updated since the last run gets a fresh PAC before Blitz starts.
+2. **After launch** the launcher starts `scripts\watch_update.py` hidden with the
+   current size of `%APPDATA%\Blitz\app.log`. The watcher tails that log for the
+   updater verdict:
+   - "Update ... is not available" - exits within seconds, nothing stays running.
+   - update found - keeps watching the version in `app.asar`; when it changes it
+     rebuilds the PAC, stops the Blitz instance that was relaunched after the
+     update (it loses the custom argument), and starts Blitz again with the new
+     `data:` PAC. One restart maximum, then it exits.
+   - Blitz quits without updating - watcher exits.
 
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts\install_task.ps1
-   # remove it again
-   powershell -ExecutionPolicy Bypass -File scripts\install_task.ps1 -Uninstall
-   ```
-
-   Task name: `BlitzNoAds PAC Sync`.
+   Activity is logged to `build\update-watch.log`. Pass `-NoWatch` to
+   `launch_noads.ps1` to skip the update check for a single launch.
 
 Note that syncing only re-encodes the domain list that is already checked in. It
 does not discover new ad domains; add those to `domains.txt` and the next sync
