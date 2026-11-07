@@ -17,6 +17,8 @@ spikes.
 | `domains.txt` | 410 ad, SSP and tracker domains observed in Blitz network traffic and cookies |
 | `docs/findings.md` | How the analysis was done, what was measured, what failed and why |
 | `scripts/make_pac.py` | Builds PAC files (full + compact) and the `data:` URL variant |
+| `scripts/launch_noads.ps1` | Starts Blitz with the PAC, process-scoped |
+| `scripts/make_shortcut.ps1` | Creates the desktop launcher shortcut |
 | `scripts/hosts_apply.ps1` | System-wide hosts file block (works, but affects every app) |
 | `scripts/hosts_revert.ps1` | Removes the managed hosts block |
 | `scripts/asar_inject.py` | asar rebuilder / injector; **experimental, rejected**, see findings |
@@ -48,19 +50,16 @@ spikes.
    Output goes to `build\`: `blitz.pac` (readable), `blitz-min.pac` (compact
    regex), `blitz-pac-url.txt` (percent-encoded `data:` URL, ~5.7k characters).
 
-2. Create a shortcut to `%LOCALAPPDATA%\Programs\Blitz\Blitz.exe` and append the
-   switch, passing the contents of `blitz-pac-url.txt`:
+2. Create a desktop shortcut that starts Blitz with the PAC:
 
    ```powershell
-   $url = Get-Content .\build\blitz-pac-url.txt -Raw
-   $target = "$env:LOCALAPPDATA\Programs\Blitz\Blitz.exe"
-   $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut(
-       "$env:USERPROFILE\Desktop\Blitz (no ads).lnk")
-   $shortcut.TargetPath = $target
-   $shortcut.Arguments = '--proxy-pac-url="' + $url.Trim() + '"'
-   $shortcut.IconLocation = "$target,0"
-   $shortcut.Save()
+   powershell -ExecutionPolicy Bypass -File scripts\make_shortcut.ps1
    ```
+
+   The shortcut runs `scripts\launch_noads.ps1` with a hidden window and passes
+   `--proxy-pac-url="<data URL>"` to `Blitz.exe`. A `.lnk` argument field is
+   limited to 260 characters, so the PAC URL is read at launch time instead of
+   being stored in the shortcut.
 
    Launch Blitz through that shortcut. The argument applies to this process tree
    only; nothing else on the system is affected.
