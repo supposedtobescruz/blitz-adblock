@@ -1,7 +1,11 @@
 # Starts Blitz with a proxy PAC that routes known ad domains to a dead proxy.
 # Scoped to the Blitz process tree: no system DNS or hosts changes.
 #
-# Requires blitz-pac-url.txt next to this script (generate it with make_pac.py).
+# Before launching, the PAC is re-generated when the installed Blitz version or
+# the domain list changed (see sync_pac.py), so a client update does not leave a
+# stale block list behind.
+#
+# Requires build/blitz-pac-url.txt (generate it with make_pac.py or sync_pac.py).
 param(
     [string]$Base = $PSScriptRoot,
     [string]$Exe = (Join-Path $env:LOCALAPPDATA 'Programs\Blitz\Blitz.exe')
@@ -12,6 +16,28 @@ $ErrorActionPreference = 'Stop'
 if (-not (Test-Path $Exe)) {
     Write-Error "Blitz.exe not found: $Exe"
     exit 1
+}
+
+# --- keep the PAC current -------------------------------------------------
+$sync = Join-Path $Base 'sync_pac.py'
+$logDir = Join-Path $Base '..\build'
+New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+$log = Join-Path $logDir 'sync.log'
+
+if (Test-Path $sync) {
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python) {
+        try {
+            $output = & $python.Source $sync --quiet 2>&1
+            if ($LASTEXITCODE -ne 0 -or $output) {
+                "[$(Get-Date -Format 's')] $output" | Add-Content -Path $log -Encoding UTF8
+            }
+        }
+        catch {
+            "[$(Get-Date -Format 's')] sync failed: $($_.Exception.Message)" |
+                Add-Content -Path $log -Encoding UTF8
+        }
+    }
 }
 
 $pacUrlFile = Join-Path $Base 'blitz-pac-url.txt'
