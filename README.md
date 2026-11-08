@@ -21,6 +21,7 @@ spikes.
 | `scripts/watch_update.py` | Watches one launch for a Blitz update, rebuilds PAC, restarts Blitz |
 | `scripts/launch_noads.ps1` | Starts Blitz with the PAC, process-scoped, syncing first |
 | `scripts/make_shortcut.ps1` | Creates the desktop launcher shortcut |
+| `scripts/retarget_shortcuts.ps1` | Routes existing Blitz icons and the autostart Run value through the launcher |
 | `scripts/hosts_apply.ps1` | System-wide hosts file block (works, but affects every app) |
 | `scripts/hosts_revert.ps1` | Removes the managed hosts block |
 | `scripts/asar_inject.py` | asar rebuilder / injector; **experimental, rejected**, see findings |
@@ -66,7 +67,23 @@ spikes.
    Launch Blitz through that shortcut. The argument applies to this process tree
    only; nothing else on the system is affected.
 
-3. To verify, resolve a known ad host and check that Blitz traffic to it fails:
+3. Route every other Blitz icon through the launcher:
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts\retarget_shortcuts.ps1
+   ```
+
+   This rewrites the desktop shortcut, Start Menu entry, taskbar pin and the
+   `HKCU\...\Run` autostart value so they call `launch_noads.ps1` instead of
+   `Blitz.exe`. Without it, launching from an untouched icon (or at login) starts
+   Blitz without the PAC, which is how ads come back after an update. Originals
+   are backed up under `build\`; `-DryRun` shows what would change.
+
+   If Blitz is already running without the PAC, `launch_noads.ps1` restarts it
+   once so the block applies. A running instance that uses an older PAC is
+   restarted the same way.
+
+4. To verify, resolve a known ad host and check that Blitz traffic to it fails:
 
    ```powershell
    Resolve-DnsName securepubads.g.doubleclick.net
@@ -95,10 +112,12 @@ installed:
    current size of `%APPDATA%\Blitz\app.log`. The watcher tails that log for the
    updater verdict:
    - "Update ... is not available" - exits within seconds, nothing stays running.
-   - update found - keeps watching the version in `app.asar`; when it changes it
-     rebuilds the PAC, stops the Blitz instance that was relaunched after the
-     update (it loses the custom argument), and starts Blitz again with the new
-     `data:` PAC. One restart maximum, then it exits.
+   - update found - keeps watching the version in `app.asar`. Blitz usually
+     quits so the installer can replace the app; the watcher keeps waiting while
+     no Blitz process exists, then detects the new version, rebuilds the PAC,
+     stops any Blitz process the installer relaunched without the argument, and
+     starts Blitz again with the fresh `data:` PAC. One restart maximum, then it
+     exits.
    - Blitz quits without updating - watcher exits.
 
    Activity is logged to `build\update-watch.log`. Pass `-NoWatch` to
