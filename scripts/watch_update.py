@@ -199,6 +199,7 @@ def main() -> int:
     log("update detected, watching for version change")
     deadline = time.time() + args.update_seconds
     changed = False
+    app_closed = False
     while time.time() < deadline:
         current = installed_version(args.asar)
         if current and current != started_version:
@@ -206,15 +207,12 @@ def main() -> int:
             changed = True
             break
         if not blitz_pids():
-            # App quit (installer runs now); keep waiting for the on-disk version.
-            time.sleep(args.poll)
-            current = installed_version(args.asar)
-            if current and current != started_version:
-                log("version changed after quit %s -> %s" % (started_version, current))
-                changed = True
-                break
-            log("Blitz closed during update, exiting")
-            return 0
+            # Blitz quit so the installer can replace the app. Keep waiting for
+            # the version on disk; the installer may take a while and relaunches
+            # Blitz without our PAC argument.
+            if not app_closed:
+                log("Blitz closed, waiting for the installer to finish")
+                app_closed = True
         time.sleep(args.poll)
 
     if not changed:
