@@ -1,16 +1,18 @@
 # Starts Blitz with a proxy PAC that routes known ad domains to a dead proxy.
 # Scoped to the Blitz process tree: no system DNS or hosts changes.
 #
-# Before launching, the PAC is re-generated when the installed Blitz version or
-# the domain list changed. After launching, a short-lived watcher tails the app
-# log: if Blitz finds an update, the watcher waits for it to install, rebuilds the
-# PAC and restarts Blitz with the new PAC. When no update is pending the watcher
-# exits within seconds, so nothing keeps running in the background.
-#
-# Requires build/blitz-pac-url.txt (generate it with make_pac.py or sync_pac.py).
+# Behaviour:
+#   * regenerates the PAC when the Blitz version or the domain list changed
+#   * if Blitz is already running without the PAC (autostart, taskbar icon,
+#     post-update relaunch) it restarts Blitz so the PAC actually applies
+#   * if a newer PAC exists than the running process, it restarts Blitz too
+#   * after launching, a short-lived watcher tails the app log: if Blitz finds an
+#     update it waits for the install, rebuilds the PAC and restarts Blitz.
+#     When no update is pending the watcher exits within seconds.
 param(
     [string]$Base = $PSScriptRoot,
     [string]$Exe = (Join-Path $env:LOCALAPPDATA 'Programs\Blitz\Blitz.exe'),
+    [string]$BlitzArgs = '',
     [switch]$NoWatch
 )
 
@@ -24,6 +26,10 @@ if (-not (Test-Path $Exe)) {
 $buildDir = Join-Path $Base '..\build'
 New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
 $log = Join-Path $buildDir 'sync.log'
+
+function Write-LauncherLog([string]$Message) {
+    "[$(Get-Date -Format 's')] $Message" | Add-Content -Path $log -Encoding UTF8
+}
 
 function Resolve-Python {
     $cache = Join-Path $buildDir 'python-path.txt'
@@ -44,6 +50,13 @@ function Resolve-Python {
     return $exe
 }
 
+function Get-BlitzMainProcess {
+    Get-CimInstance Win32_Process -Filter "Name='Blitz.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -and $_.CommandLine -notmatch '--type=' } |
+        Sort-Object CreationDate |
+        Select-Object -First 1
+}
+
 $pythonPath = Resolve-Python
 
 # --- keep the PAC current before launch -----------------------------------
@@ -51,22 +64,19 @@ $sync = Join-Path $Base 'sync_pac.py'
 if ((Test-Path $sync) -and $pythonPath) {
     try {
         $output = & $pythonPath $sync --quiet 2>&1
-        if ($LASTEXITCODE -ne 0 -or $output) {
-            "[$(Get-Date -Format 's')] $output" | Add-Content -Path $log -Encoding UTF8
-        }
+        if ($LASTEXITCODE -ne 0 -or $output) { Write-LauncherLog $output }
     }
     catch {
-        "[$(Get-Date -Format 's')] sync failed: $($_.Exception.Message)" |
-            Add-Content -Path $log -Encoding UTF8
+        Write-LauncherLog "sync failed: $($_.Exception.Message)"
     }
 }
 
 $pacUrlFile = Join-Path $Base 'blitz-pac-url.txt'
-if (-not (Test-Path $pacUrlFile)) {
-    $pacUrlFile = Join-Path $buildDir 'blitz-pac-url.txt'
-}
-if (-not (Test-Path $pacUrlFile)) {
-    $pacUrlFile = Join-Path $Base '..\build\blitz-pac-url.txt'
+foreach ($candidate in @(
+        (Join-Path $Base 'blitz-pac-url.txt'),
+        (Join-Path $buildDir 'blitz-pac-url.txt'),
+        (Join-Path $Base '..\build\blitz-pac-url.txt'))) {
+    if (Test-Path $candidate) { $pacUrlFile = $candidate; break }
 }
 if (-not (Test-Path $pacUrlFile)) {
     Write-Error "PAC URL missing: $pacUrlFile (run make_pac.py first)"
@@ -74,6 +84,25 @@ if (-not (Test-Path $pacUrlFile)) {
 }
 
 $pacUrl = (Get-Content $pacUrlFile -Raw).Trim()
+$pacWritten = (Get-Item $pacUrlFile).LastWriteTime
+
+# --- make sure the running instance actually uses the PAC ------------------
+$running = Get-BlitzMainProcess
+if ($running) {
+    $hasPac = $running.CommandLine -match '--proxy-pac-url'
+    $stalePac = $running.CreationDate -lt $pacWritten
+    if ($hasPac -and -not $stalePac) {
+        Write-LauncherLog "Blitz already running with PAC (pid $($running.ProcessId))"
+        exit 0
+    }
+    $reason = if (-not $hasPac) { 'without PAC' } else { 'with an outdated PAC' }
+    Write-LauncherLog "restarting Blitz (pid $($running.ProcessId)) $reason"
+    & taskkill /F /T /PID $running.ProcessId 2>$null | Out-Null
+    for ($i = 0; $i -lt 30; $i++) {
+        if (-not (Get-Process Blitz -ErrorAction SilentlyContinue)) { break }
+        Start-Sleep -Milliseconds 500
+    }
+}
 
 # --- launch ---------------------------------------------------------------
 $appLog = Join-Path $env:APPDATA 'Blitz\app.log'
@@ -82,7 +111,11 @@ if (Test-Path $appLog) {
     $logSize = (Get-Item $appLog).Length
 }
 
-Start-Process -FilePath $Exe -ArgumentList ('--proxy-pac-url="' + $pacUrl + '"')
+$arguments = '--proxy-pac-url="' + $pacUrl + '"'
+if ($BlitzArgs) { $arguments += ' ' + $BlitzArgs }
+
+Start-Process -FilePath $Exe -ArgumentList $arguments
+Write-LauncherLog 'launched Blitz with PAC'
 
 # --- watch this launch for an update -------------------------------------
 if (-not $NoWatch) {
