@@ -21,7 +21,7 @@ import os
 import re
 import urllib.parse
 
-BLOCK_PROXY = "PROXY 127.0.0.1:9"
+BLOCK_PROXY = "PROXY 127.0.0.1:10009"
 
 
 def load_domains(path: str) -> list[str]:
