@@ -14,7 +14,7 @@ spikes.
 
 | Path | Purpose |
 |---|---|
-| `domains.txt` | 410 ad, SSP and tracker domains observed in Blitz network traffic and cookies |
+| `domains.txt` | 427 ad, SSP and tracker domains observed in Blitz network traffic and cookies |
 | `docs/findings.md` | How the analysis was done, what was measured, what failed and why |
 | `scripts/make_pac.py` | Builds PAC files (full + compact) and the `data:` URL variant |
 | `scripts/sync_pac.py` | Rebuilds the PAC when the Blitz version or domain list changes |
@@ -60,9 +60,10 @@ spikes.
    ```
 
    The shortcut runs `scripts\launch_noads.ps1` with a hidden window and passes
-   `--proxy-pac-url="<data URL>"` to `Blitz.exe`. A `.lnk` argument field is
-   limited to 260 characters, so the PAC URL is read at launch time instead of
-   being stored in the shortcut.
+   `--proxy-pac-url="<data URL>" --disable-quic` to `Blitz.exe`. A `.lnk`
+   argument field is limited to 260 characters, so the PAC URL is read at launch
+   time instead of being stored in the shortcut. QUIC is disabled because UDP
+   traffic cannot traverse an HTTP proxy, which would otherwise bypass the PAC.
 
    Launch Blitz through that shortcut. The argument applies to this process tree
    only; nothing else on the system is affected.
