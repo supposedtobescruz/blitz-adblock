@@ -111,7 +111,7 @@ if (Test-Path $appLog) {
     $logSize = (Get-Item $appLog).Length
 }
 
-$arguments = '--proxy-pac-url="' + $pacUrl + '"'
+$arguments = '--proxy-pac-url="' + $pacUrl + '" --disable-quic'
 if ($BlitzArgs) { $arguments += ' ' + $BlitzArgs }
 
 Start-Process -FilePath $Exe -ArgumentList $arguments
