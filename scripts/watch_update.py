@@ -136,6 +136,23 @@ def sync_pac() -> bool:
         return False
 
 
+def clear_cache() -> None:
+    script = os.path.join(HERE, "clear_cache.ps1")
+    if not os.path.exists(script):
+        return
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script],
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        if result.stdout.strip():
+            log("cache: %s" % result.stdout.strip())
+    except (OSError, subprocess.SubprocessError) as exc:
+        log("cache clear error: %s" % exc)
+
+
 def launch_with_pac() -> None:
     try:
         with open(PAC_URL, encoding="ascii") as fh:
@@ -221,6 +238,8 @@ def main() -> int:
 
     if not sync_pac():
         return 1
+
+    clear_cache()
 
     # Give the updater a moment to settle, then make sure the running instance
     # carries our PAC argument.

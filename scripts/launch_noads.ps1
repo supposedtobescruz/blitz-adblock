@@ -6,6 +6,9 @@
 #   * if Blitz is already running without the PAC (autostart, taskbar icon,
 #     post-update relaunch) it restarts Blitz so the PAC actually applies
 #   * if a newer PAC exists than the running process, it restarts Blitz too
+#   * repairs the launcher wiring of the known icons if a Blitz update reset them
+#   * clears stale Blitz HTTP caches on every launch so cached ad creatives
+#     cannot render even before the PAC can block them
 #   * after launching, a short-lived watcher tails the app log: if Blitz finds an
 #     update it waits for the install, rebuilds the PAC and restarts Blitz.
 #     When no update is pending the watcher exits within seconds.
@@ -101,6 +104,30 @@ if ($running) {
     for ($i = 0; $i -lt 30; $i++) {
         if (-not (Get-Process Blitz -ErrorAction SilentlyContinue)) { break }
         Start-Sleep -Milliseconds 500
+    }
+}
+
+# --- repair shortcuts after a Blitz update ----------------------------------
+$repair = Join-Path $Base 'repair_shortcuts.ps1'
+if (Test-Path $repair) {
+    try {
+        $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $repair 2>&1
+        foreach ($line in $out) { if ($line) { Write-LauncherLog $line } }
+    }
+    catch {
+        Write-LauncherLog "repair failed: $($_.Exception.Message)"
+    }
+}
+
+# --- clear stale caches before launch ------------------------------------------
+$clear = Join-Path $Base 'clear_cache.ps1'
+if (Test-Path $clear) {
+    try {
+        $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $clear -Force 2>&1
+        foreach ($line in $out) { if ($line) { Write-LauncherLog $line } }
+    }
+    catch {
+        Write-LauncherLog "cache clear failed: $($_.Exception.Message)"
     }
 }
 

@@ -108,6 +108,8 @@ def main() -> int:
         return 0
 
     os.makedirs(out_dir, exist_ok=True)
+
+    previous_version = state.get("version")
     pac = full_pac(domains)
     mini = compact_pac(domains)
     url = data_url(mini)
@@ -127,6 +129,15 @@ def main() -> int:
             fh,
             indent=2,
         )
+
+    if previous_version and previous_version != version:
+        marker = os.path.join(out_dir, ".cache-clear")
+        try:
+            with open(marker, "w", encoding="utf-8") as fh:
+                fh.write(version)
+            print("note: Blitz %s -> %s, cache-clear marker written" % (previous_version, version))
+        except OSError as exc:
+            print("note: could not write %s: %s" % (marker, exc))
 
     print(
         "regenerated: Blitz %s, %d domains, url %d chars"
