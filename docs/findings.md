@@ -32,7 +32,7 @@
 | Windows hosts file (`0.0.0.0` entries) | System-wide | Works. Ad requests fail with `net_error -105`. Drawback: affects every app |
 | Chromium `--host-resolver-rules` | Blitz only | Partially honoured. Some requests still resolved |
 | Chromium `--proxy-pac-url` (file) | Blitz only | Ignored; PAC file fetch is blocked for the network sandbox |
-| Chromium `--proxy-pac-url` (data URL) | Blitz only | Works. Loaded via `proxy_chain [127.0.0.1:9]`; ad requests then fail (`net_error -7`) instead of succeeding |
+| Chromium `--proxy-pac-url` (data URL) | Blitz only | Works. Loaded via `proxy_chain [127.0.0.1:10009]`; ad requests then fail (`net_error -130`/`-102`) instead of succeeding. Note: `127.0.0.1:9` was rejected because TCPSVCS (Simple TCP/IP Services) listens on port 9 on some machines, which silently swallows proxy CONNECT requests |
 | `NODE_OPTIONS=--require` hook | Blitz only | Ignored by the packaged app |
 | `app.asar` main-bundle injection | Blitz only | Rejected: the app exits when `src/index.js` content changes (integrity/anti-tamper) |
 | Blitz Premium | Blitz only | Official ad-free tier, paid |

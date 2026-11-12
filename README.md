@@ -22,6 +22,9 @@ spikes.
 | `scripts/launch_noads.ps1` | Starts Blitz with the PAC, process-scoped, syncing first |
 | `scripts/make_shortcut.ps1` | Creates the desktop launcher shortcut |
 | `scripts/retarget_shortcuts.ps1` | Routes existing Blitz icons and the autostart Run value through the launcher |
+| `scripts/repair_shortcuts.ps1` | Silently restores the launcher wiring if a Blitz update reset the icons |
+| `scripts/clear_cache.ps1` | Moves Blitz Cache/Code Cache/Service Worker aside so cached ad creatives cannot render |
+| `scripts/verify.py` | Launches Blitz with the PAC, measures blocked ad requests and prints PASS/FAIL |
 | `scripts/hosts_apply.ps1` | System-wide hosts file block (works, but affects every app) |
 | `scripts/hosts_revert.ps1` | Removes the managed hosts block |
 | `scripts/asar_inject.py` | asar rebuilder / injector; **experimental, rejected**, see findings |
@@ -31,7 +34,7 @@ spikes.
 - PAC blocking is the only Blitz-scoped approach that demonstrably loads. Chromium
   in this build accepts a `data:` PAC URL passed via `--proxy-pac-url`; a `file://`
   PAC URL is ignored because the PAC fetcher runs in the network sandbox.
-  Ad requests were then routed to a dead proxy (`127.0.0.1:9`).
+  Ad requests are then routed to `127.0.0.1:10009` (a port nothing listens on) and fail fast.
 - The full end-to-end proof (every ad request failing, Blitz fully functional) was
   not reproduced cleanly in netlog, so treat the PAC path as **best effort**.
 - The hosts file approach is verifiably effective (all ad requests fail with
@@ -90,8 +93,9 @@ spikes.
    Resolve-DnsName securepubads.g.doubleclick.net
    ```
 
-   DNS still resolves (the PAC decides, not DNS). Check the app log or a local
-   proxy on `127.0.0.1:9` if you want request-level confirmation.
+   DNS still resolves (the PAC decides, not DNS). For a full end-to-end check,
+   run `python scripts\verify.py`; it launches Blitz, collects a netlog and
+   reports blocked vs. successful ad requests.
 
 ### Keeping the PAC current after a Blitz update
 
