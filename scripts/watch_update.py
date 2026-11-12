@@ -147,7 +147,7 @@ def launch_with_pac() -> None:
         log("Blitz.exe missing: %s" % EXE)
         return
     subprocess.Popen(
-        [EXE, '--proxy-pac-url="%s"' % url],
+        [EXE, '--proxy-pac-url="%s"' % url, "--disable-quic"],
         close_fds=True,
         creationflags=getattr(subprocess, "DETACHED_PROCESS", 0),
     )
